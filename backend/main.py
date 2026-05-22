@@ -1,7 +1,5 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional, List, Dict
 import random
 from datetime import datetime, timedelta
 
@@ -9,13 +7,18 @@ app = FastAPI(title="Vitalife Health Monitor")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3003",
+        "http://localhost:5173",
+        "https://vittalife-mfqowsj20-linsphps-projects.vercel.app",
+        "https://vittalife.vercel.app",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Profile database
 profiles_database = [
     {
         "id": 1,
@@ -32,8 +35,8 @@ profiles_database = [
             "sleep_quality": 6,
             "activity_steps": 5000,
             "stress_level": 7,
-            "hydration": 5
-        }
+            "hydration": 5,
+        },
     },
     {
         "id": 2,
@@ -50,8 +53,8 @@ profiles_database = [
             "sleep_quality": 8,
             "activity_steps": 10000,
             "stress_level": 3,
-            "hydration": 8
-        }
+            "hydration": 8,
+        },
     },
     {
         "id": 3,
@@ -68,8 +71,8 @@ profiles_database = [
             "sleep_quality": 5,
             "activity_steps": 3000,
             "stress_level": 8,
-            "hydration": 4
-        }
+            "hydration": 4,
+        },
     },
     {
         "id": 4,
@@ -86,8 +89,8 @@ profiles_database = [
             "sleep_quality": 7,
             "activity_steps": 2000,
             "stress_level": 5,
-            "hydration": 6
-        }
+            "hydration": 6,
+        },
     },
     {
         "id": 5,
@@ -104,67 +107,26 @@ profiles_database = [
             "sleep_quality": 5,
             "activity_steps": 6000,
             "stress_level": 9,
-            "hydration": 5
-        }
-    }
+            "hydration": 5,
+        },
+    },
 ]
 
-# Global state
-current_user_id: Optional[int] = None
-current_vitals: Optional[Dict] = None
+current_user_id = None
+current_vitals = None
 
-# Recommendation function
-def get_personalized_recommendations(condition: str) -> list:
-    recommendations_map = {
-        "Hipertensão": [
-            "🧂 Reduzir Sódio",
-            "❤️ Monitorar Pressão",
-            "💊 Tomar Medicação",
-            "🏃 Exercício Moderado",
-            "☕ Limitar Cafeína",
-            "📅 Check-up Mensal"
-        ],
-        "Saudável": [
-            "🏋️ Manter Atividade",
-            "🥗 Nutrição Balanceada",
-            "🏥 Check-up Anual",
-            "🧘 Praticar Yoga",
-            "😴 Sono Regular",
-            "💧 Hidratação"
-        ],
-        "Risco Cardíaco Alto": [
-            "🩺 Consultar Cardiologista",
-            "🥦 Dieta Restrita",
-            "🧘 Evitar Estresse",
-            "❤️ Monitorar Pressão",
-            "🏃 Exercício Leve",
-            "💊 Medicação"
-        ],
-        "Sedentário": [
-            "🚶 Aumentar Atividade",
-            "🚶 Caminhadas Diárias",
-            "🤸 Alongamento",
-            "🪑 Evitar Ficar Sentado",
-            "🧘 Yoga",
-            "🩹 Fisioterapia"
-        ],
-        "Estresse Elevado": [
-            "🧠 Terapia",
-            "🧘 Meditação",
-            "🧘 Yoga",
-            "💼 Reduzir Carga",
-            "💊 Suplementos",
-            "💉 Acupuntura"
-        ]
+
+@app.get("/")
+def home():
+    return {
+        "message": "API Vitalife funcionando",
+        "docs": "Acesse /docs para ver as rotas",
     }
-    return recommendations_map.get(condition, [])
 
-# Simulate vitals function
-def simulate_vitals(profile: dict) -> dict:
-    base = profile["baseline_vitals"]
+
+def simulate_vitals(profile):
     condition = profile["condition"]
-    
-    # Define variation ranges based on condition
+
     if condition == "Hipertensão":
         hr_range = (80, 100)
         bp_sys_range = (135, 160)
@@ -231,8 +193,8 @@ def simulate_vitals(profile: dict) -> dict:
         steps_range = (2000, 10000)
         stress_range = (1, 10)
         hydra_range = (3, 9)
-    
-    vitals = {
+
+    return {
         "heart_rate": random.randint(hr_range[0], hr_range[1]),
         "blood_pressure_systolic": random.randint(bp_sys_range[0], bp_sys_range[1]),
         "blood_pressure_diastolic": random.randint(bp_dia_range[0], bp_dia_range[1]),
@@ -242,153 +204,161 @@ def simulate_vitals(profile: dict) -> dict:
         "sleep_quality": random.randint(sleep_range[0], sleep_range[1]),
         "activity_steps": random.randint(steps_range[0], steps_range[1]),
         "stress_level": random.randint(stress_range[0], stress_range[1]),
-        "hydration": random.randint(hydra_range[0], hydra_range[1])
+        "hydration": random.randint(hydra_range[0], hydra_range[1]),
     }
-    return vitals
 
-# Risk calculation function
-def calculate_risk_level(vitals: dict) -> dict:
-    # Simple heuristic: score based on abnormal values
+
+def calculate_risk_level(vitals):
     score = 0
     alerts = []
-    
-    # Heart rate
+
     if vitals["heart_rate"] < 60:
         score += 10
-        alerts.append("⚠️ Frequência cardíaca baixa")
+        alerts.append("Frequência cardíaca baixa")
     elif vitals["heart_rate"] > 100:
         score += 15
-        alerts.append("⚠️ Frequência cardíaca elevada")
-    
-    # Blood pressure systolic
+        alerts.append("Frequência cardíaca elevada")
+
     if vitals["blood_pressure_systolic"] >= 140:
         score += 20
-        alerts.append("🔴 Pressão sistólica elevada")
-    elif vitals["blood_pressure_systolic"] < 90:
-        score += 15
-        alerts.append("🔵 Pressão sistólica baixa")
-    
-    # Blood pressure diastolic
+        alerts.append("Pressão sistólica elevada")
+
     if vitals["blood_pressure_diastolic"] >= 90:
         score += 15
-        alerts.append("🔴 Pressão diastólica elevada")
-    elif vitals["blood_pressure_diastolic"] < 60:
-        score += 10
-        alerts.append("🔵 Pressão diastólica baixa")
-    
-    # Temperature
+        alerts.append("Pressão diastólica elevada")
+
     if vitals["temperature"] >= 38:
         score += 10
-        alerts.append("🌡️ Febre")
-    elif vitals["temperature"] < 35:
-        score += 10
-        alerts.append("🌡️ Hipotermia")
-    
-    # Oxygen saturation
+        alerts.append("Febre")
+
     if vitals["oxygen_saturation"] < 95:
         score += 20
-        alerts.append("🔴 Saturação baixa de oxigênio")
-    
-    # Respiratory rate
+        alerts.append("Saturação baixa de oxigênio")
+
     if vitals["respiratory_rate"] > 20:
         score += 10
-        alerts.append("⚠️ Frequência respiratória elevada")
+        alerts.append("Frequência respiratória elevada")
     elif vitals["respiratory_rate"] < 12:
         score += 10
-        alerts.append("⚠️ Frequência respiratória baixa")
-    
-    # Sleep quality
+        alerts.append("Frequência respiratória baixa")
+
     if vitals["sleep_quality"] < 5:
         score += 5
-        alerts.append("😴 Qualidade do sono baixa")
-    
-    # Activity steps
+        alerts.append("Qualidade do sono baixa")
+
     if vitals["activity_steps"] < 5000:
         score += 5
-        alerts.append("🚶 Baixa atividade física")
-    
-    # Stress level
+        alerts.append("Baixa atividade física")
+
     if vitals["stress_level"] >= 8:
         score += 10
-        alerts.append("🧠 Nível de estresse alto")
-    
-    # Hydration
+        alerts.append("Nível de estresse alto")
+
     if vitals["hydration"] < 5:
         score += 5
-        alerts.append("💧 Baixa hidratação")
-    
-    # Cap score at 100
+        alerts.append("Baixa hidratação")
+
     risk_score = min(score, 100)
-    
+
     if risk_score < 30:
         risk_level = "Baixo"
     elif risk_score < 60:
         risk_level = "Moderado"
     else:
         risk_level = "Alto"
-    
+
     return {
         "risk_score": risk_score,
         "risk_level": risk_level,
-        "alerts": alerts
+        "alerts": alerts,
     }
 
-# Endpoints
+
 @app.get("/api/users")
 def get_users():
     return profiles_database
 
+
 @app.post("/api/users/select/{user_id}")
 def select_user(user_id: int):
-    global current_user_id, current_vitals
+    global current_user_id
+    global current_vitals
+
     for profile in profiles_database:
         if profile["id"] == user_id:
             current_user_id = user_id
             current_vitals = simulate_vitals(profile)
-            return {"message": "User selected", "user": profile, "vitals": current_vitals}
-    raise HTTPException(status_code=404, detail="User not found")
+            risk = calculate_risk_level(current_vitals)
+
+            return {
+                "message": "Usuário selecionado",
+                "user": profile,
+                "vitals": current_vitals,
+                "risk": risk,
+            }
+
+    raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
 
 @app.get("/api/health/dashboard")
 def get_dashboard():
-    global current_user_id, current_vitals
     if current_user_id is None or current_vitals is None:
-        raise HTTPException(status_code=400, detail="No user selected. Please select a user first.")
+        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
+
     profile = next(p for p in profiles_database if p["id"] == current_user_id)
     risk = calculate_risk_level(current_vitals)
-    recommendations = get_personalized_recommendations(profile["condition"])
+
     return {
         "user": profile,
         "vitals": current_vitals,
         "risk": risk,
-        "recommendations": recommendations
     }
+
 
 @app.get("/api/health/history")
 def get_history(days: int = 30):
     if current_user_id is None:
-        raise HTTPException(status_code=400, detail="No user selected.")
+        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
+
     profile = next(p for p in profiles_database if p["id"] == current_user_id)
     history = []
+
     for i in range(days):
-        date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
+        date = (datetime.now() - timedelta(days=days - i - 1)).strftime("%Y-%m-%d")
         vitals = simulate_vitals(profile)
         risk = calculate_risk_level(vitals)
-        history.append({
-            "date": date,
-            "vitals": vitals,
-            "risk": risk
-        })
-    return history
+
+        history.append(
+            {
+                "date": date,
+                "vitals": vitals,
+                "risk": risk,
+            }
+        )
+
+    return {
+        "history": history,
+    }
+
 
 @app.post("/api/health/simulate")
 def simulate_new_data():
     global current_vitals
+
     if current_user_id is None:
-        raise HTTPException(status_code=400, detail="No user selected.")
+        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
+
     profile = next(p for p in profiles_database if p["id"] == current_user_id)
     current_vitals = simulate_vitals(profile)
-    return {"vitals": current_vitals}
+    risk = calculate_risk_level(current_vitals)
+
+    return {
+        "vitals": current_vitals,
+        "risk": risk,
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
