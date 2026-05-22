@@ -8,7 +8,61 @@ function App() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [error, setError] = useState('');
 
-const API_URL = 'https://vittalife-backend.onrender.com';
+  const [pendingProfile, setPendingProfile] = useState(null);
+  const [profileEmail, setProfileEmail] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileLoginError, setProfileLoginError] = useState('');
+
+  const API_URL = import.meta.env.VITE_API_URL || 'https://vittalife-backend.onrender.com';
+
+  const profileCredentials = {
+    1: {
+      email: 'joao@vitalife.com',
+      password: '1234',
+      avatar: 'JS',
+      icon: '🫀',
+      color: '#22c55e',
+      gradient: 'linear-gradient(135deg, #22c55e, #14b8a6)',
+      description: 'Monitoramento focado em pressão arterial e rotina cardíaca.',
+    },
+    2: {
+      email: 'maria@vitalife.com',
+      password: '1234',
+      avatar: 'MS',
+      icon: '🌿',
+      color: '#10b981',
+      gradient: 'linear-gradient(135deg, #10b981, #06b6d4)',
+      description: 'Perfil saudável com acompanhamento preventivo e bem-estar.',
+    },
+    3: {
+      email: 'pedro@vitalife.com',
+      password: '1234',
+      avatar: 'PC',
+      icon: '⚠️',
+      color: '#ef4444',
+      gradient: 'linear-gradient(135deg, #ef4444, #f97316)',
+      description: 'Acompanhamento avançado para sinais de risco cardíaco.',
+    },
+    4: {
+      email: 'ana@vitalife.com',
+      password: '1234',
+      avatar: 'AS',
+      icon: '🚶',
+      color: '#f59e0b',
+      gradient: 'linear-gradient(135deg, #f59e0b, #eab308)',
+      description: 'Foco em movimento, passos, sedentarismo e evolução diária.',
+    },
+    5: {
+      email: 'carlos@vitalife.com',
+      password: '1234',
+      avatar: 'CO',
+      icon: '🧠',
+      color: '#8b5cf6',
+      gradient: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+      description: 'Acompanhamento de estresse, sono e equilíbrio dos sinais vitais.',
+    },
+  };
+
   useEffect(() => {
     if (!showSimulation) return;
 
@@ -28,11 +82,54 @@ const API_URL = 'https://vittalife-backend.onrender.com';
       });
   }, [showSimulation, API_URL]);
 
+  function openProfileLogin(profile) {
+    setPendingProfile(profile);
+    setProfileEmail('');
+    setProfilePassword('');
+    setProfileLoginError('');
+  }
+
+  function closeProfileLogin() {
+    setPendingProfile(null);
+    setProfileEmail('');
+    setProfilePassword('');
+    setProfileLoginError('');
+  }
+
+  async function handleProfileLogin(event) {
+    event.preventDefault();
+
+    if (!pendingProfile) return;
+
+    const credentials = profileCredentials[pendingProfile.id];
+
+    if (!credentials) {
+      setProfileLoginError('Credenciais não cadastradas para este perfil.');
+      return;
+    }
+
+    const typedEmail = profileEmail.trim().toLowerCase();
+    const registeredEmail = credentials.email.trim().toLowerCase();
+
+    if (typedEmail !== registeredEmail || profilePassword !== credentials.password) {
+      setProfileLoginError('E-mail ou senha incorretos para este perfil.');
+      return;
+    }
+
+    setProfileLoginError('');
+    await selectUser(pendingProfile.id);
+    closeProfileLogin();
+  }
+
   async function selectUser(id) {
     try {
       const response = await fetch(`${API_URL}/api/users/select/${id}`, {
         method: 'POST',
       });
+
+      if (!response.ok) {
+        throw new Error('Erro ao selecionar usuário');
+      }
 
       const data = await response.json();
       setSelectedData(data);
@@ -278,6 +375,62 @@ const API_URL = 'https://vittalife-backend.onrender.com';
     ];
   }
 
+  function getConditionColor(condition) {
+    const value = String(condition || '').toLowerCase();
+
+    if (value.includes('saudável')) {
+      return {
+        bg: '#dcfce7',
+        text: '#166534',
+        border: '#bbf7d0',
+        label: 'Estável',
+      };
+    }
+
+    if (value.includes('hipertensão')) {
+      return {
+        bg: '#fef3c7',
+        text: '#92400e',
+        border: '#fde68a',
+        label: 'Atenção',
+      };
+    }
+
+    if (value.includes('risco')) {
+      return {
+        bg: '#fee2e2',
+        text: '#991b1b',
+        border: '#fecaca',
+        label: 'Prioritário',
+      };
+    }
+
+    if (value.includes('sedentário')) {
+      return {
+        bg: '#ffedd5',
+        text: '#9a3412',
+        border: '#fed7aa',
+        label: 'Movimento',
+      };
+    }
+
+    if (value.includes('estresse')) {
+      return {
+        bg: '#ede9fe',
+        text: '#5b21b6',
+        border: '#ddd6fe',
+        label: 'Mental',
+      };
+    }
+
+    return {
+      bg: '#e2e8f0',
+      text: '#334155',
+      border: '#cbd5e1',
+      label: 'Monitorado',
+    };
+  }
+
   const user = selectedData?.user;
   const rawVitals = selectedData?.vitals || selectedData?.user?.vitals;
 
@@ -296,73 +449,26 @@ const API_URL = 'https://vittalife-backend.onrender.com';
 
   if (!showSimulation) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: 'radial-gradient(circle at top, #16a34a 0%, #064e3b 35%, #020617 100%)',
-          color: 'white',
-          padding: '40px',
-          fontFamily: 'Arial',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <div style={{ maxWidth: '1000px', textAlign: 'center' }}>
-          <div
-            style={{
-              display: 'inline-block',
-              padding: '14px 26px',
-              borderRadius: '999px',
-              background: 'rgba(34, 197, 94, 0.18)',
-              border: '1px solid rgba(134, 239, 172, 0.45)',
-              color: '#bbf7d0',
-              fontWeight: 'bold',
-              marginBottom: '20px',
-              letterSpacing: '2px',
-            }}
-          >
+      <div style={homePageStyle}>
+        <div style={homeContentStyle}>
+          <div style={introBadgeStyle}>
             PULSEIRA INTELIGENTE DE MONITORAMENTO
           </div>
 
-          <h1
-            style={{
-              fontSize: '96px',
-              color: '#22c55e',
-              margin: '0',
-              fontWeight: '900',
-              letterSpacing: '4px',
-              textShadow: '0 0 25px rgba(34, 197, 94, 0.75)',
-            }}
-          >
+          <h1 style={introTitleStyle}>
             VITALIFE
           </h1>
 
-          <p
-            style={{
-              fontSize: '28px',
-              color: '#dcfce7',
-              marginTop: '10px',
-              fontWeight: 'bold',
-            }}
-          >
+          <p style={introSubtitleStyle}>
             Monitorando hoje para proteger o amanhã
           </p>
 
-          <p style={{ fontSize: '20px', lineHeight: '1.6', color: '#d1fae5', marginTop: '25px' }}>
-            Uma pulseira inteligente conectada a uma plataforma digital que
-            monitora sinais vitais, identifica padrões de risco e gera alertas
-            preventivos para ajudar no cuidado com a saúde.
+          <p style={introTextStyle}>
+            Uma pulseira inteligente conectada a uma plataforma digital que monitora sinais vitais,
+            identifica padrões de risco e gera alertas preventivos para ajudar no cuidado com a saúde.
           </p>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: '20px',
-              marginTop: '40px',
-            }}
-          >
+          <div style={introCardsGridStyle}>
             <div style={cardIntroStyle}>
               <div style={introIconStyle}>❤️</div>
               <h3>Monitoramento</h3>
@@ -384,18 +490,7 @@ const API_URL = 'https://vittalife-backend.onrender.com';
 
           <button
             onClick={() => setShowSimulation(true)}
-            style={{
-              marginTop: '45px',
-              background: '#22c55e',
-              color: '#052e16',
-              padding: '18px 40px',
-              border: 'none',
-              borderRadius: '999px',
-              fontSize: '22px',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 12px 30px rgba(34, 197, 94, 0.45)',
-            }}
+            style={accessButtonStyle}
           >
             Acessar simulação
           </button>
@@ -405,23 +500,16 @@ const API_URL = 'https://vittalife-backend.onrender.com';
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#020617', color: 'white', padding: '30px', fontFamily: 'Arial' }}>
+    <div style={simulationPageStyle}>
       {!user ? (
         <button
           onClick={() => {
             setShowSimulation(false);
             setSelectedData(null);
             setSelectedDay(null);
+            closeProfileLogin();
           }}
-          style={{
-            background: '#334155',
-            color: 'white',
-            padding: '10px 16px',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            marginBottom: '20px',
-          }}
+          style={backButtonStyle}
         >
           ← Voltar para início
         </button>
@@ -430,68 +518,206 @@ const API_URL = 'https://vittalife-backend.onrender.com';
           onClick={() => {
             setSelectedData(null);
             setSelectedDay(null);
+            closeProfileLogin();
           }}
-          style={{
-            background: '#16a34a',
-            color: 'white',
-            padding: '10px 16px',
-            border: 'none',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            marginBottom: '20px',
-          }}
+          style={profileBackButtonStyle}
         >
           ← Voltar para perfis
         </button>
       )}
 
-      <h1 style={{ fontSize: '48px', textAlign: 'center', color: '#22c55e', textShadow: '0 0 14px rgba(34,197,94,0.5)' }}>
-        VITALIFE
-      </h1>
+      <div style={pageHeaderStyle}>
+        <div style={headerBadgeStyle}>Área de perfis monitorados</div>
 
-      <p style={{ textAlign: 'center', marginBottom: '30px' }}>
-        Painel de simulação da pulseira inteligente
-      </p>
+        <h1 style={panelTitleStyle}>
+          VITALIFE
+        </h1>
+
+        <p style={panelSubtitleStyle}>
+          Painel de simulação da pulseira inteligente
+        </p>
+      </div>
 
       {error && (
-        <div style={{ background: '#7f1d1d', padding: '15px', borderRadius: '10px', marginBottom: '20px' }}>
+        <div style={errorBoxStyle}>
           {error}
         </div>
       )}
 
       {!user && (
-        <>
-          <h2>Escolha um perfil:</h2>
+        <div style={profilesSectionStyle}>
+          <div style={profilesTopStyle}>
+            <div>
+              <h2 style={sectionTitleStyle}>Escolha um perfil</h2>
+              <p style={sectionDescriptionStyle}>
+                Clique em um perfil para validar o acesso com e-mail e senha cadastrados.
+              </p>
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px' }}>
-            {users.map((profile) => (
-              <button
-                key={profile.id}
-                onClick={() => selectUser(profile.id)}
+            <div style={profileCountBoxStyle}>
+              <span style={profileCountLabelStyle}>Perfis</span>
+              <strong style={profileCountNumberStyle}>{users.length}</strong>
+            </div>
+          </div>
+
+          <div style={profileGridStyle}>
+            {users.map((profile) => {
+              const credentials = profileCredentials[profile.id];
+              const conditionStyle = getConditionColor(profile.condition);
+
+              return (
+                <button
+                  key={profile.id}
+                  onClick={() => openProfileLogin(profile)}
+                  style={profileCardStyle}
+                  onMouseEnter={(event) => {
+                    event.currentTarget.style.transform = 'translateY(-8px)';
+                    event.currentTarget.style.boxShadow = '0 26px 70px rgba(34, 197, 94, 0.22)';
+                    event.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.55)';
+                  }}
+                  onMouseLeave={(event) => {
+                    event.currentTarget.style.transform = 'translateY(0)';
+                    event.currentTarget.style.boxShadow = '0 18px 45px rgba(0, 0, 0, 0.28)';
+                    event.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)';
+                  }}
+                >
+                  <div style={profileCardTopStyle}>
+                    <div
+                      style={{
+                        ...profileAvatarStyle,
+                        background: credentials?.gradient || 'linear-gradient(135deg, #22c55e, #14b8a6)',
+                      }}
+                    >
+                      <span>{credentials?.avatar || 'VL'}</span>
+                    </div>
+
+                    <div style={profileIconStyle}>
+                      {credentials?.icon || '⌚'}
+                    </div>
+                  </div>
+
+                  <div style={profileMainInfoStyle}>
+                    <h3 style={profileNameStyle}>{profile.name}</h3>
+                    <p style={profileRoleStyle}>Perfil monitorado pela pulseira</p>
+                  </div>
+
+                  <div style={profileDetailsStyle}>
+                    <div style={profileDetailItemStyle}>
+                      <span style={profileDetailLabelStyle}>Idade</span>
+                      <strong style={profileDetailValueStyle}>{profile.age} anos</strong>
+                    </div>
+
+                    <div style={profileDetailItemStyle}>
+                      <span style={profileDetailLabelStyle}>Status</span>
+                      <strong
+                        style={{
+                          ...profileStatusBadgeStyle,
+                          background: conditionStyle.bg,
+                          color: conditionStyle.text,
+                          borderColor: conditionStyle.border,
+                        }}
+                      >
+                        {conditionStyle.label}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div style={conditionBoxStyle}>
+                    <span style={conditionLabelStyle}>Condição principal</span>
+                    <strong style={conditionValueStyle}>{profile.condition}</strong>
+                  </div>
+
+                  <p style={profileDescriptionStyle}>
+                    {credentials?.description || 'Acompanhamento preventivo dos sinais vitais.'}
+                  </p>
+
+                  <div style={secureAccessBoxStyle}>
+                    <div>
+                      <strong style={secureAccessTitleStyle}>Acesso protegido</strong>
+                      <p style={secureAccessTextStyle}>E-mail e senha necessários para entrar.</p>
+                    </div>
+                    <span style={lockIconStyle}>🔒</span>
+                  </div>
+
+                  <div style={profileFooterStyle}>
+                    <span>Entrar no perfil</span>
+                    <strong>→</strong>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {pendingProfile && !user && (
+        <div style={modalOverlayStyle}>
+          <div style={modalCardStyle}>
+            <button onClick={closeProfileLogin} style={modalCloseButtonStyle}>
+              ×
+            </button>
+
+            <div style={modalProfileHeaderStyle}>
+              <div
                 style={{
-                  background: 'white',
-                  color: '#111827',
-                  padding: '20px',
-                  borderRadius: '15px',
-                  border: 'none',
-                  textAlign: 'left',
-                  cursor: 'pointer',
-                  fontSize: '16px',
+                  ...modalAvatarStyle,
+                  background: profileCredentials[pendingProfile.id]?.gradient || 'linear-gradient(135deg, #22c55e, #14b8a6)',
                 }}
               >
-                <strong>{profile.name}</strong>
-                <br />
-                Idade: {profile.age}
-                <br />
-                Condição: {profile.condition}
+                {profileCredentials[pendingProfile.id]?.avatar || 'VL'}
+              </div>
+
+              <div>
+                <span style={modalSmallTextStyle}>Login do perfil</span>
+                <h2 style={modalTitleStyle}>{pendingProfile.name}</h2>
+                <p style={modalDescriptionStyle}>
+                  Digite as credenciais cadastradas para liberar a simulação da pulseira.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleProfileLogin}>
+              <label style={modalLabelStyle}>E-mail</label>
+              <input
+                type="email"
+                value={profileEmail}
+                onChange={(event) => setProfileEmail(event.target.value)}
+                placeholder="Digite o e-mail do perfil"
+                style={modalInputStyle}
+              />
+
+              <label style={modalLabelStyle}>Senha</label>
+              <input
+                type="password"
+                value={profilePassword}
+                onChange={(event) => setProfilePassword(event.target.value)}
+                placeholder="Digite a senha"
+                style={modalInputStyle}
+              />
+
+              {profileLoginError && (
+                <div style={modalErrorStyle}>
+                  {profileLoginError}
+                </div>
+              )}
+
+              <button type="submit" style={modalSubmitButtonStyle}>
+                Entrar na simulação
               </button>
-            ))}
+            </form>
+
+            <div style={modalSecurityNoticeStyle}>
+              <span>🛡️</span>
+              <p>
+                Acesso restrito ao perfil selecionado. As credenciais de teste não são exibidas publicamente nos cards.
+              </p>
+            </div>
           </div>
-        </>
+        </div>
       )}
 
       {user && (
-        <div style={{ background: 'white', color: '#111827', borderRadius: '20px', padding: '25px', maxWidth: '1050px', margin: '0 auto' }}>
+        <div style={dashboardCardStyle}>
           <h2 style={{ color: '#15803d' }}>{user.name}</h2>
           <p><strong>Idade:</strong> {user.age}</p>
           <p><strong>Condição:</strong> {user.condition}</p>
@@ -501,7 +727,7 @@ const API_URL = 'https://vittalife-backend.onrender.com';
           </h3>
 
           {vitals && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            <div style={vitalsGridStyle}>
               <div style={vitalCardStyle}>❤️ Batimentos<br /><strong>{vitals.heart_rate} bpm</strong></div>
               <div style={vitalCardStyle}>🩸 Pressão<br /><strong>{vitals.blood_pressure_systolic}/{vitals.blood_pressure_diastolic}</strong></div>
               <div style={vitalCardStyle}>🌡️ Temperatura<br /><strong>{vitals.temperature}°C</strong></div>
@@ -598,7 +824,7 @@ const API_URL = 'https://vittalife-backend.onrender.com';
           </div>
 
           {vitals && activityStatus && (
-            <div style={{ marginTop: '25px', padding: '18px', background: '#f8fafc', borderRadius: '14px', border: '1px solid #e2e8f0' }}>
+            <div style={activityBoxStyle}>
               <h3 style={{ marginTop: 0 }}>Análise de atividade física</h3>
 
               <p>
@@ -631,7 +857,7 @@ const API_URL = 'https://vittalife-backend.onrender.com';
           )}
 
           {risk && (
-            <div style={{ marginTop: '20px', padding: '15px', background: '#dcfce7', borderRadius: '12px' }}>
+            <div style={riskBoxStyle}>
               <strong>Nível de risco:</strong> {risk.riskLevel || risk.risk_level} — {risk.riskScore || risk.risk_score}%
               <ul>
                 {(risk.alerts || []).map((alert, index) => (
@@ -643,16 +869,7 @@ const API_URL = 'https://vittalife-backend.onrender.com';
 
           <button
             onClick={simulate}
-            style={{
-              marginTop: '25px',
-              background: '#16a34a',
-              color: 'white',
-              padding: '12px 20px',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontSize: '16px',
-            }}
+            style={simulateButtonStyle}
           >
             Simular Pulseira
           </button>
@@ -661,18 +878,9 @@ const API_URL = 'https://vittalife-backend.onrender.com';
             onClick={() => {
               setSelectedData(null);
               setSelectedDay(null);
+              closeProfileLogin();
             }}
-            style={{
-              marginTop: '25px',
-              marginLeft: '10px',
-              background: '#374151',
-              color: 'white',
-              padding: '12px 20px',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontSize: '16px',
-            }}
+            style={changeProfileButtonStyle}
           >
             Trocar perfil
           </button>
@@ -681,6 +889,524 @@ const API_URL = 'https://vittalife-backend.onrender.com';
     </div>
   );
 }
+
+const homePageStyle = {
+  minHeight: '100vh',
+  background: 'radial-gradient(circle at top, #16a34a 0%, #064e3b 35%, #020617 100%)',
+  color: 'white',
+  padding: '40px',
+  fontFamily: 'Arial',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const homeContentStyle = {
+  maxWidth: '1000px',
+  textAlign: 'center',
+};
+
+const simulationPageStyle = {
+  minHeight: '100vh',
+  background:
+    'radial-gradient(circle at top center, rgba(34,197,94,0.13), transparent 32%), linear-gradient(135deg, #020617 0%, #050b24 52%, #020617 100%)',
+  color: 'white',
+  padding: '30px',
+  fontFamily: 'Arial',
+};
+
+const pageHeaderStyle = {
+  textAlign: 'center',
+  marginBottom: '38px',
+};
+
+const headerBadgeStyle = {
+  display: 'inline-block',
+  padding: '9px 16px',
+  borderRadius: '999px',
+  background: 'rgba(34, 197, 94, 0.11)',
+  border: '1px solid rgba(34, 197, 94, 0.23)',
+  color: '#86efac',
+  fontSize: '12px',
+  fontWeight: '800',
+  letterSpacing: '2px',
+  textTransform: 'uppercase',
+  marginBottom: '14px',
+};
+
+const introBadgeStyle = {
+  display: 'inline-block',
+  padding: '14px 26px',
+  borderRadius: '999px',
+  background: 'rgba(34, 197, 94, 0.18)',
+  border: '1px solid rgba(134, 239, 172, 0.45)',
+  color: '#bbf7d0',
+  fontWeight: 'bold',
+  marginBottom: '20px',
+  letterSpacing: '2px',
+};
+
+const introTitleStyle = {
+  fontSize: '96px',
+  color: '#22c55e',
+  margin: '0',
+  fontWeight: '900',
+  letterSpacing: '4px',
+  textShadow: '0 0 25px rgba(34, 197, 94, 0.75)',
+};
+
+const introSubtitleStyle = {
+  fontSize: '28px',
+  color: '#dcfce7',
+  marginTop: '10px',
+  fontWeight: 'bold',
+};
+
+const introTextStyle = {
+  fontSize: '20px',
+  lineHeight: '1.6',
+  color: '#d1fae5',
+  marginTop: '25px',
+};
+
+const introCardsGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+  gap: '20px',
+  marginTop: '40px',
+};
+
+const accessButtonStyle = {
+  marginTop: '45px',
+  background: '#22c55e',
+  color: '#052e16',
+  padding: '18px 40px',
+  border: 'none',
+  borderRadius: '999px',
+  fontSize: '22px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  boxShadow: '0 12px 30px rgba(34, 197, 94, 0.45)',
+};
+
+const backButtonStyle = {
+  background: 'rgba(51, 65, 85, 0.9)',
+  color: 'white',
+  padding: '13px 20px',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '12px',
+  cursor: 'pointer',
+  marginBottom: '20px',
+  fontWeight: '700',
+  fontSize: '15px',
+};
+
+const profileBackButtonStyle = {
+  background: '#16a34a',
+  color: 'white',
+  padding: '10px 16px',
+  border: 'none',
+  borderRadius: '10px',
+  cursor: 'pointer',
+  marginBottom: '20px',
+};
+
+const panelTitleStyle = {
+  fontSize: '56px',
+  textAlign: 'center',
+  color: '#22c55e',
+  textShadow: '0 0 22px rgba(34,197,94,0.55)',
+  margin: 0,
+  letterSpacing: '3px',
+};
+
+const panelSubtitleStyle = {
+  textAlign: 'center',
+  marginTop: '12px',
+  marginBottom: '0',
+  color: '#e2e8f0',
+  fontSize: '16px',
+  fontWeight: '600',
+};
+
+const errorBoxStyle = {
+  background: '#7f1d1d',
+  padding: '15px',
+  borderRadius: '10px',
+  marginBottom: '20px',
+};
+
+const profilesSectionStyle = {
+  width: '100%',
+  maxWidth: '1580px',
+  margin: '0 auto',
+};
+
+const profilesTopStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '20px',
+  marginBottom: '22px',
+};
+
+const sectionTitleStyle = {
+  fontSize: '26px',
+  margin: 0,
+  color: '#f8fafc',
+};
+
+const sectionDescriptionStyle = {
+  marginTop: '8px',
+  marginBottom: 0,
+  color: '#94a3b8',
+  fontSize: '15px',
+};
+
+const profileCountBoxStyle = {
+  minWidth: '130px',
+  padding: '14px 18px',
+  background: 'rgba(255,255,255,0.06)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '18px',
+  textAlign: 'right',
+};
+
+const profileCountLabelStyle = {
+  display: 'block',
+  color: '#94a3b8',
+  fontSize: '11px',
+  textTransform: 'uppercase',
+  letterSpacing: '1.6px',
+};
+
+const profileCountNumberStyle = {
+  display: 'block',
+  color: '#86efac',
+  fontSize: '28px',
+  marginTop: '4px',
+};
+
+const profileGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(270px, 1fr))',
+  gap: '22px',
+};
+
+const profileCardStyle = {
+  background: 'rgba(255, 255, 255, 0.96)',
+  color: '#111827',
+  padding: '22px',
+  borderRadius: '26px',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
+  textAlign: 'left',
+  cursor: 'pointer',
+  fontSize: '16px',
+  boxShadow: '0 18px 45px rgba(0, 0, 0, 0.28)',
+  transition: 'transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease',
+  minHeight: '360px',
+  display: 'flex',
+  flexDirection: 'column',
+};
+
+const profileCardTopStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: '18px',
+};
+
+const profileAvatarStyle = {
+  width: '62px',
+  height: '62px',
+  borderRadius: '22px',
+  color: '#ffffff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: '900',
+  fontSize: '20px',
+  letterSpacing: '1px',
+  boxShadow: '0 14px 32px rgba(15, 23, 42, 0.28)',
+};
+
+const profileIconStyle = {
+  width: '46px',
+  height: '46px',
+  borderRadius: '16px',
+  background: '#f1f5f9',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '24px',
+};
+
+const profileMainInfoStyle = {
+  marginBottom: '16px',
+};
+
+const profileNameStyle = {
+  margin: 0,
+  color: '#0f172a',
+  fontSize: '25px',
+  fontWeight: '900',
+};
+
+const profileRoleStyle = {
+  marginTop: '5px',
+  marginBottom: 0,
+  color: '#64748b',
+  fontSize: '14px',
+  fontWeight: '600',
+};
+
+const profileDetailsStyle = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '10px',
+  marginBottom: '12px',
+};
+
+const profileDetailItemStyle = {
+  background: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '16px',
+  padding: '12px',
+};
+
+const profileDetailLabelStyle = {
+  display: 'block',
+  color: '#64748b',
+  fontSize: '11px',
+  textTransform: 'uppercase',
+  letterSpacing: '1px',
+  fontWeight: '800',
+};
+
+const profileDetailValueStyle = {
+  display: 'block',
+  marginTop: '5px',
+  color: '#0f172a',
+  fontSize: '15px',
+};
+
+const profileStatusBadgeStyle = {
+  display: 'inline-block',
+  marginTop: '6px',
+  border: '1px solid',
+  padding: '4px 8px',
+  borderRadius: '999px',
+  fontSize: '12px',
+};
+
+const conditionBoxStyle = {
+  background: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '16px',
+  padding: '13px',
+  marginBottom: '13px',
+};
+
+const conditionLabelStyle = {
+  display: 'block',
+  color: '#64748b',
+  fontSize: '11px',
+  textTransform: 'uppercase',
+  letterSpacing: '1px',
+  fontWeight: '800',
+};
+
+const conditionValueStyle = {
+  display: 'block',
+  marginTop: '6px',
+  color: '#0f172a',
+  fontSize: '15px',
+};
+
+const profileDescriptionStyle = {
+  color: '#475569',
+  lineHeight: '1.45',
+  fontSize: '14px',
+  marginTop: '0',
+  marginBottom: '15px',
+};
+
+const secureAccessBoxStyle = {
+  marginTop: 'auto',
+  background: 'linear-gradient(135deg, #ecfdf5, #f0fdfa)',
+  border: '1px solid #bbf7d0',
+  borderRadius: '18px',
+  padding: '13px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: '12px',
+};
+
+const secureAccessTitleStyle = {
+  color: '#166534',
+  fontSize: '14px',
+};
+
+const secureAccessTextStyle = {
+  margin: '4px 0 0',
+  color: '#64748b',
+  fontSize: '12px',
+};
+
+const lockIconStyle = {
+  width: '34px',
+  height: '34px',
+  borderRadius: '12px',
+  background: '#dcfce7',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+};
+
+const profileFooterStyle = {
+  marginTop: '16px',
+  paddingTop: '14px',
+  borderTop: '1px solid #e2e8f0',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  color: '#16a34a',
+  fontWeight: '900',
+};
+
+const modalOverlayStyle = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(2, 6, 23, 0.82)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 9999,
+  padding: '20px',
+  backdropFilter: 'blur(8px)',
+};
+
+const modalCardStyle = {
+  width: '100%',
+  maxWidth: '480px',
+  background: 'white',
+  color: '#111827',
+  borderRadius: '28px',
+  padding: '30px',
+  position: 'relative',
+  boxShadow: '0 30px 90px rgba(0, 0, 0, 0.5)',
+};
+
+const modalCloseButtonStyle = {
+  position: 'absolute',
+  top: '16px',
+  right: '18px',
+  background: '#e5e7eb',
+  border: 'none',
+  width: '34px',
+  height: '34px',
+  borderRadius: '999px',
+  cursor: 'pointer',
+  fontSize: '22px',
+  lineHeight: '1',
+};
+
+const modalProfileHeaderStyle = {
+  display: 'flex',
+  gap: '16px',
+  alignItems: 'center',
+  marginBottom: '22px',
+  paddingRight: '35px',
+};
+
+const modalAvatarStyle = {
+  minWidth: '62px',
+  height: '62px',
+  borderRadius: '22px',
+  color: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: '900',
+  fontSize: '19px',
+  boxShadow: '0 16px 34px rgba(15,23,42,0.24)',
+};
+
+const modalSmallTextStyle = {
+  color: '#16a34a',
+  fontSize: '12px',
+  fontWeight: '900',
+  textTransform: 'uppercase',
+  letterSpacing: '1.7px',
+};
+
+const modalTitleStyle = {
+  color: '#0f172a',
+  margin: '5px 0 4px',
+  fontSize: '27px',
+};
+
+const modalDescriptionStyle = {
+  color: '#64748b',
+  margin: 0,
+  fontSize: '14px',
+  lineHeight: '1.45',
+};
+
+const modalLabelStyle = {
+  display: 'block',
+  fontWeight: 'bold',
+  marginTop: '14px',
+  marginBottom: '6px',
+};
+
+const modalInputStyle = {
+  width: '100%',
+  padding: '14px',
+  borderRadius: '14px',
+  border: '1px solid #cbd5e1',
+  fontSize: '15px',
+  outline: 'none',
+  boxSizing: 'border-box',
+};
+
+const modalErrorStyle = {
+  marginTop: '12px',
+  background: '#fee2e2',
+  color: '#991b1b',
+  padding: '10px',
+  borderRadius: '10px',
+  fontSize: '14px',
+};
+
+const modalSubmitButtonStyle = {
+  width: '100%',
+  marginTop: '20px',
+  background: '#16a34a',
+  color: 'white',
+  padding: '15px',
+  border: 'none',
+  borderRadius: '14px',
+  fontSize: '16px',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  boxShadow: '0 12px 26px rgba(22, 163, 74, 0.28)',
+};
+
+const modalSecurityNoticeStyle = {
+  marginTop: '16px',
+  display: 'flex',
+  gap: '10px',
+  alignItems: 'flex-start',
+  background: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  padding: '12px',
+  borderRadius: '14px',
+  color: '#64748b',
+  fontSize: '13px',
+  lineHeight: '1.45',
+};
 
 const cardIntroStyle = {
   background: 'rgba(255, 255, 255, 0.12)',
@@ -693,6 +1419,21 @@ const cardIntroStyle = {
 
 const introIconStyle = {
   fontSize: '38px',
+};
+
+const dashboardCardStyle = {
+  background: 'white',
+  color: '#111827',
+  borderRadius: '20px',
+  padding: '25px',
+  maxWidth: '1050px',
+  margin: '0 auto',
+};
+
+const vitalsGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+  gap: '12px',
 };
 
 const vitalCardStyle = {
@@ -746,6 +1487,44 @@ const sleepInfoBoxStyle = {
   border: '1px solid #bbf7d0',
   borderRadius: '14px',
   padding: '18px',
+};
+
+const activityBoxStyle = {
+  marginTop: '25px',
+  padding: '18px',
+  background: '#f8fafc',
+  borderRadius: '14px',
+  border: '1px solid #e2e8f0',
+};
+
+const riskBoxStyle = {
+  marginTop: '20px',
+  padding: '15px',
+  background: '#dcfce7',
+  borderRadius: '12px',
+};
+
+const simulateButtonStyle = {
+  marginTop: '25px',
+  background: '#16a34a',
+  color: 'white',
+  padding: '12px 20px',
+  border: 'none',
+  borderRadius: '10px',
+  cursor: 'pointer',
+  fontSize: '16px',
+};
+
+const changeProfileButtonStyle = {
+  marginTop: '25px',
+  marginLeft: '10px',
+  background: '#374151',
+  color: 'white',
+  padding: '12px 20px',
+  border: 'none',
+  borderRadius: '10px',
+  cursor: 'pointer',
+  fontSize: '16px',
 };
 
 export default App;

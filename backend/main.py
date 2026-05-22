@@ -1,17 +1,44 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query, Path, Request
 from fastapi.middleware.cors import CORSMiddleware
 import random
 from datetime import datetime, timedelta
 
-app = FastAPI(title="Vitalife Health Monitor")
+app = FastAPI(
+    title="Vitalife Health Monitor",
+    description="API segura para simulação de dados vitais da pulseira Vitalife",
+    version="1.0.0",
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3003",
+        "http://localhost:5173",
+    ],
+    allow_origin_regex=r"https://.*\.(web\.app|firebaseapp\.com|vercel\.app)",
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+    response.headers["Cache-Control"] = "no-store"
+
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+
+    return response
+
 
 profiles_database = [
     {
@@ -115,11 +142,20 @@ def home():
     return {
         "message": "API Vitalife funcionando",
         "docs": "Acesse /docs para ver as rotas",
+        "status": "online",
     }
 
 
+def find_profile_by_id(user_id: int):
+    for profile in profiles_database:
+        if profile["id"] == user_id:
+            return profile
+
+    return None
+
+
 def simulate_vitals(profile):
-    condition = profile["condition"]
+    condition = profile.get("condition", "")
 
     if condition == "Hipertensão":
         hr_range = (80, 100)
@@ -206,49 +242,60 @@ def calculate_risk_level(vitals):
     score = 0
     alerts = []
 
-    if vitals["heart_rate"] < 60:
+    heart_rate = vitals.get("heart_rate", 0)
+    systolic = vitals.get("blood_pressure_systolic", 0)
+    diastolic = vitals.get("blood_pressure_diastolic", 0)
+    temperature = vitals.get("temperature", 0)
+    oxygen = vitals.get("oxygen_saturation", 0)
+    respiratory = vitals.get("respiratory_rate", 0)
+    sleep = vitals.get("sleep_quality", 0)
+    steps = vitals.get("activity_steps", 0)
+    stress = vitals.get("stress_level", 0)
+    hydration = vitals.get("hydration", 0)
+
+    if heart_rate < 60:
         score += 10
         alerts.append("Frequência cardíaca baixa")
-    elif vitals["heart_rate"] > 100:
+    elif heart_rate > 100:
         score += 15
         alerts.append("Frequência cardíaca elevada")
 
-    if vitals["blood_pressure_systolic"] >= 140:
+    if systolic >= 140:
         score += 20
         alerts.append("Pressão sistólica elevada")
 
-    if vitals["blood_pressure_diastolic"] >= 90:
+    if diastolic >= 90:
         score += 15
         alerts.append("Pressão diastólica elevada")
 
-    if vitals["temperature"] >= 38:
+    if temperature >= 38:
         score += 10
         alerts.append("Febre")
 
-    if vitals["oxygen_saturation"] < 95:
+    if oxygen < 95:
         score += 20
         alerts.append("Saturação baixa de oxigênio")
 
-    if vitals["respiratory_rate"] > 20:
+    if respiratory > 20:
         score += 10
         alerts.append("Frequência respiratória elevada")
-    elif vitals["respiratory_rate"] < 12:
+    elif respiratory < 12:
         score += 10
         alerts.append("Frequência respiratória baixa")
 
-    if vitals["sleep_quality"] < 5:
+    if sleep < 5:
         score += 5
         alerts.append("Qualidade do sono baixa")
 
-    if vitals["activity_steps"] < 5000:
+    if steps < 5000:
         score += 5
         alerts.append("Baixa atividade física")
 
-    if vitals["stress_level"] >= 8:
+    if stress >= 8:
         score += 10
         alerts.append("Nível de estresse alto")
 
-    if vitals["hydration"] < 5:
+    if hydration < 5:
         score += 5
         alerts.append("Baixa hidratação")
 
@@ -270,28 +317,50 @@ def calculate_risk_level(vitals):
 
 @app.get("/api/users")
 def get_users():
-    return profiles_database
+    safe_profiles = []
+
+    for profile in profiles_database:
+        safe_profiles.append(
+            {
+                "id": profile["id"],
+                "name": profile["name"],
+                "age": profile["age"],
+                "condition": profile["condition"],
+                "baseline_vitals": profile["baseline_vitals"],
+            }
+        )
+
+    return safe_profiles
 
 
 @app.post("/api/users/select/{user_id}")
-def select_user(user_id: int):
+def select_user(
+    user_id: int = Path(..., ge=1, le=100)
+):
     global current_user_id
     global current_vitals
 
-    for profile in profiles_database:
-        if profile["id"] == user_id:
-            current_user_id = user_id
-            current_vitals = simulate_vitals(profile)
-            risk = calculate_risk_level(current_vitals)
+    profile = find_profile_by_id(user_id)
 
-            return {
-                "message": "Usuário selecionado",
-                "user": profile,
-                "vitals": current_vitals,
-                "risk": risk,
-            }
+    if not profile:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-    raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    current_user_id = user_id
+    current_vitals = simulate_vitals(profile)
+    risk = calculate_risk_level(current_vitals)
+
+    return {
+        "message": "Usuário selecionado",
+        "user": {
+            "id": profile["id"],
+            "name": profile["name"],
+            "age": profile["age"],
+            "condition": profile["condition"],
+            "baseline_vitals": profile["baseline_vitals"],
+        },
+        "vitals": current_vitals,
+        "risk": risk,
+    }
 
 
 @app.get("/api/health/dashboard")
@@ -299,22 +368,38 @@ def get_dashboard():
     if current_user_id is None or current_vitals is None:
         raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
 
-    profile = next(p for p in profiles_database if p["id"] == current_user_id)
+    profile = find_profile_by_id(current_user_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
     risk = calculate_risk_level(current_vitals)
 
     return {
-        "user": profile,
+        "user": {
+            "id": profile["id"],
+            "name": profile["name"],
+            "age": profile["age"],
+            "condition": profile["condition"],
+            "baseline_vitals": profile["baseline_vitals"],
+        },
         "vitals": current_vitals,
         "risk": risk,
     }
 
 
 @app.get("/api/health/history")
-def get_history(days: int = 30):
+def get_history(
+    days: int = Query(default=30, ge=1, le=90)
+):
     if current_user_id is None:
         raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
 
-    profile = next(p for p in profiles_database if p["id"] == current_user_id)
+    profile = find_profile_by_id(current_user_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
     history = []
 
     for i in range(days):
@@ -342,7 +427,11 @@ def simulate_new_data():
     if current_user_id is None:
         raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
 
-    profile = next(p for p in profiles_database if p["id"] == current_user_id)
+    profile = find_profile_by_id(current_user_id)
+
+    if not profile:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
     current_vitals = simulate_vitals(profile)
     risk = calculate_risk_level(current_vitals)
 
