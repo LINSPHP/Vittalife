@@ -8,8 +8,7 @@ function App() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [error, setError] = useState('');
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
+const API_URL = 'https://vittalife-backend.onrender.com';
   useEffect(() => {
     if (!showSimulation) return;
 
