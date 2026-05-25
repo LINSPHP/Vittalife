@@ -1,447 +1,389 @@
-from fastapi import FastAPI, HTTPException, Query, Path, Request
-from fastapi.middleware.cors import CORSMiddleware
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
+from typing import Optional
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from security_config import configure_security_middlewares
+from audit_logger import audit_log, log_login_attempt
+
 
 app = FastAPI(
-    title="Vitalife Health Monitor",
-    description="API segura para simulação de dados vitais da pulseira Vitalife",
+    title="Vitalife API",
+    description="Backend da simulação Vitalife",
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3003",
-        "http://localhost:5173",
-    ],
-    allow_origin_regex=r"https://.*\.(web\.app|firebaseapp\.com|vercel\.app)",
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
-)
+configure_security_middlewares(app)
 
 
-@app.middleware("http")
-async def security_headers_middleware(request: Request, call_next):
-    response = await call_next(request)
-
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-    response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
-    response.headers["Cache-Control"] = "no-store"
-
-    if request.url.scheme == "https":
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
-
-    return response
-
-
-profiles_database = [
+users = [
     {
         "id": 1,
         "name": "João Silva",
-        "age": 45,
+        "age": 58,
         "condition": "Hipertensão",
-        "baseline_vitals": {
-            "heart_rate": 85,
-            "blood_pressure_systolic": 145,
-            "blood_pressure_diastolic": 95,
-            "temperature": 36.5,
-            "oxygen_saturation": 97,
-            "respiratory_rate": 16,
-            "sleep_quality": 6,
-            "activity_steps": 5000,
-            "stress_level": 7,
-            "hydration": 5,
-        },
     },
     {
         "id": 2,
         "name": "Maria Santos",
-        "age": 32,
+        "age": 42,
         "condition": "Saudável",
-        "baseline_vitals": {
-            "heart_rate": 70,
-            "blood_pressure_systolic": 120,
-            "blood_pressure_diastolic": 80,
-            "temperature": 36.5,
-            "oxygen_saturation": 99,
-            "respiratory_rate": 14,
-            "sleep_quality": 8,
-            "activity_steps": 10000,
-            "stress_level": 3,
-            "hydration": 8,
-        },
     },
     {
         "id": 3,
         "name": "Pedro Costa",
-        "age": 58,
-        "condition": "Risco Cardíaco Alto",
-        "baseline_vitals": {
-            "heart_rate": 90,
-            "blood_pressure_systolic": 160,
-            "blood_pressure_diastolic": 100,
-            "temperature": 36.4,
-            "oxygen_saturation": 95,
-            "respiratory_rate": 18,
-            "sleep_quality": 5,
-            "activity_steps": 3000,
-            "stress_level": 8,
-            "hydration": 4,
-        },
+        "age": 67,
+        "condition": "Risco Cardiovascular",
     },
     {
         "id": 4,
-        "name": "Ana Silva",
-        "age": 27,
+        "name": "Ana Souza",
+        "age": 35,
         "condition": "Sedentário",
-        "baseline_vitals": {
-            "heart_rate": 75,
-            "blood_pressure_systolic": 125,
-            "blood_pressure_diastolic": 82,
-            "temperature": 36.6,
-            "oxygen_saturation": 98,
-            "respiratory_rate": 16,
-            "sleep_quality": 7,
-            "activity_steps": 2000,
-            "stress_level": 5,
-            "hydration": 6,
-        },
     },
     {
         "id": 5,
         "name": "Carlos Oliveira",
-        "age": 41,
+        "age": 49,
         "condition": "Estresse Elevado",
-        "baseline_vitals": {
-            "heart_rate": 82,
-            "blood_pressure_systolic": 135,
-            "blood_pressure_diastolic": 88,
-            "temperature": 36.5,
-            "oxygen_saturation": 97,
-            "respiratory_rate": 17,
-            "sleep_quality": 5,
-            "activity_steps": 6000,
-            "stress_level": 9,
-            "hydration": 5,
-        },
     },
 ]
 
-current_user_id = None
-current_vitals = None
+selected_user: Optional[dict] = None
+current_dashboard: Optional[dict] = None
+health_history: list[dict] = []
 
 
-@app.get("/")
-def home():
-    return {
-        "message": "API Vitalife funcionando",
-        "docs": "Acesse /docs para ver as rotas",
-        "status": "online",
-    }
-
-
-def find_profile_by_id(user_id: int):
-    for profile in profiles_database:
-        if profile["id"] == user_id:
-            return profile
-
-    return None
-
-
-def simulate_vitals(profile):
-    condition = profile.get("condition", "")
+def generate_vitals_for_user(user: dict) -> dict:
+    condition = user.get("condition", "")
 
     if condition == "Hipertensão":
-        hr_range = (80, 100)
-        bp_sys_range = (135, 160)
-        bp_dia_range = (85, 105)
-        temp_range = (36.0, 37.0)
-        spo2_range = (95, 99)
-        rr_range = (15, 20)
-        sleep_range = (4, 7)
-        steps_range = (3000, 7000)
-        stress_range = (6, 9)
-        hydra_range = (4, 7)
-    elif condition == "Saudável":
-        hr_range = (60, 80)
-        bp_sys_range = (110, 130)
-        bp_dia_range = (70, 85)
-        temp_range = (36.0, 37.0)
-        spo2_range = (97, 100)
-        rr_range = (12, 16)
-        sleep_range = (7, 9)
-        steps_range = (8000, 12000)
-        stress_range = (1, 4)
-        hydra_range = (7, 9)
-    elif condition == "Risco Cardíaco Alto":
-        hr_range = (85, 105)
-        bp_sys_range = (145, 175)
-        bp_dia_range = (90, 110)
-        temp_range = (36.0, 37.0)
-        spo2_range = (93, 97)
-        rr_range = (16, 22)
-        sleep_range = (3, 6)
-        steps_range = (2000, 5000)
-        stress_range = (7, 10)
-        hydra_range = (3, 6)
-    elif condition == "Sedentário":
-        hr_range = (70, 85)
-        bp_sys_range = (115, 135)
-        bp_dia_range = (75, 90)
-        temp_range = (36.0, 37.0)
-        spo2_range = (96, 99)
-        rr_range = (14, 18)
-        sleep_range = (5, 8)
-        steps_range = (1000, 3000)
-        stress_range = (4, 7)
-        hydra_range = (5, 7)
-    elif condition == "Estresse Elevado":
-        hr_range = (78, 95)
-        bp_sys_range = (125, 145)
-        bp_dia_range = (82, 95)
-        temp_range = (36.0, 37.0)
-        spo2_range = (96, 99)
-        rr_range = (15, 20)
-        sleep_range = (4, 7)
-        steps_range = (4000, 8000)
-        stress_range = (8, 10)
-        hydra_range = (4, 7)
-    else:
-        hr_range = (60, 100)
-        bp_sys_range = (110, 140)
-        bp_dia_range = (70, 90)
-        temp_range = (36.0, 37.0)
-        spo2_range = (95, 100)
-        rr_range = (12, 20)
-        sleep_range = (5, 9)
-        steps_range = (2000, 10000)
-        stress_range = (1, 10)
-        hydra_range = (3, 9)
+        return {
+            "heart_rate": random.randint(78, 96),
+            "blood_pressure_systolic": random.randint(138, 158),
+            "blood_pressure_diastolic": random.randint(88, 98),
+            "temperature": round(random.uniform(36.2, 37.1), 1),
+            "oxygen_saturation": random.randint(95, 99),
+            "sleep_quality": random.randint(4, 7),
+            "hydration": random.randint(4, 7),
+            "activity_steps": random.randint(3500, 7500),
+            "stress_level": random.randint(5, 8),
+        }
+
+    if condition == "Saudável":
+        return {
+            "heart_rate": random.randint(62, 78),
+            "blood_pressure_systolic": random.randint(108, 124),
+            "blood_pressure_diastolic": random.randint(68, 82),
+            "temperature": round(random.uniform(36.1, 36.8), 1),
+            "oxygen_saturation": random.randint(97, 100),
+            "sleep_quality": random.randint(7, 9),
+            "hydration": random.randint(7, 9),
+            "activity_steps": random.randint(7500, 12000),
+            "stress_level": random.randint(2, 5),
+        }
+
+    if condition == "Risco Cardiovascular":
+        return {
+            "heart_rate": random.randint(90, 116),
+            "blood_pressure_systolic": random.randint(145, 175),
+            "blood_pressure_diastolic": random.randint(92, 110),
+            "temperature": round(random.uniform(36.4, 37.3), 1),
+            "oxygen_saturation": random.randint(92, 97),
+            "sleep_quality": random.randint(3, 6),
+            "hydration": random.randint(3, 6),
+            "activity_steps": random.randint(2000, 6000),
+            "stress_level": random.randint(7, 10),
+        }
+
+    if condition == "Sedentário":
+        return {
+            "heart_rate": random.randint(76, 98),
+            "blood_pressure_systolic": random.randint(124, 142),
+            "blood_pressure_diastolic": random.randint(80, 92),
+            "temperature": round(random.uniform(36.2, 37.0), 1),
+            "oxygen_saturation": random.randint(95, 99),
+            "sleep_quality": random.randint(5, 8),
+            "hydration": random.randint(4, 7),
+            "activity_steps": random.randint(1200, 4500),
+            "stress_level": random.randint(4, 7),
+        }
+
+    if condition == "Estresse Elevado":
+        return {
+            "heart_rate": random.randint(84, 108),
+            "blood_pressure_systolic": random.randint(128, 150),
+            "blood_pressure_diastolic": random.randint(82, 96),
+            "temperature": round(random.uniform(36.3, 37.2), 1),
+            "oxygen_saturation": random.randint(95, 99),
+            "sleep_quality": random.randint(3, 6),
+            "hydration": random.randint(4, 7),
+            "activity_steps": random.randint(3000, 7500),
+            "stress_level": random.randint(8, 10),
+        }
 
     return {
-        "heart_rate": random.randint(hr_range[0], hr_range[1]),
-        "blood_pressure_systolic": random.randint(bp_sys_range[0], bp_sys_range[1]),
-        "blood_pressure_diastolic": random.randint(bp_dia_range[0], bp_dia_range[1]),
-        "temperature": round(random.uniform(temp_range[0], temp_range[1]), 1),
-        "oxygen_saturation": random.randint(spo2_range[0], spo2_range[1]),
-        "respiratory_rate": random.randint(rr_range[0], rr_range[1]),
-        "sleep_quality": random.randint(sleep_range[0], sleep_range[1]),
-        "activity_steps": random.randint(steps_range[0], steps_range[1]),
-        "stress_level": random.randint(stress_range[0], stress_range[1]),
-        "hydration": random.randint(hydra_range[0], hydra_range[1]),
+        "heart_rate": random.randint(65, 90),
+        "blood_pressure_systolic": random.randint(110, 135),
+        "blood_pressure_diastolic": random.randint(70, 88),
+        "temperature": round(random.uniform(36.1, 37.0), 1),
+        "oxygen_saturation": random.randint(95, 100),
+        "sleep_quality": random.randint(5, 9),
+        "hydration": random.randint(5, 9),
+        "activity_steps": random.randint(4000, 9000),
+        "stress_level": random.randint(3, 8),
     }
 
 
-def calculate_risk_level(vitals):
+def calculate_risk(vitals: dict) -> dict:
     score = 0
     alerts = []
 
-    heart_rate = vitals.get("heart_rate", 0)
-    systolic = vitals.get("blood_pressure_systolic", 0)
-    diastolic = vitals.get("blood_pressure_diastolic", 0)
-    temperature = vitals.get("temperature", 0)
-    oxygen = vitals.get("oxygen_saturation", 0)
-    respiratory = vitals.get("respiratory_rate", 0)
-    sleep = vitals.get("sleep_quality", 0)
-    steps = vitals.get("activity_steps", 0)
-    stress = vitals.get("stress_level", 0)
-    hydration = vitals.get("hydration", 0)
-
-    if heart_rate < 60:
-        score += 10
-        alerts.append("Frequência cardíaca baixa")
-    elif heart_rate > 100:
+    if vitals["heart_rate"] < 60 or vitals["heart_rate"] > 100:
         score += 15
-        alerts.append("Frequência cardíaca elevada")
+        alerts.append("Batimentos fora do ideal")
 
-    if systolic >= 140:
+    if vitals["blood_pressure_systolic"] >= 140 or vitals["blood_pressure_diastolic"] >= 90:
+        score += 25
+        alerts.append("Pressão arterial elevada")
+
+    if vitals["oxygen_saturation"] < 95:
         score += 20
-        alerts.append("Pressão sistólica elevada")
+        alerts.append("Oxigenação baixa")
 
-    if diastolic >= 90:
+    if vitals["sleep_quality"] < 5:
         score += 15
-        alerts.append("Pressão diastólica elevada")
+        alerts.append("Sono abaixo do ideal")
 
-    if temperature >= 38:
+    if vitals["stress_level"] >= 8:
+        score += 15
+        alerts.append("Estresse elevado")
+
+    if vitals["hydration"] < 5:
         score += 10
-        alerts.append("Febre")
+        alerts.append("Hidratação baixa")
 
-    if oxygen < 95:
-        score += 20
-        alerts.append("Saturação baixa de oxigênio")
-
-    if respiratory > 20:
+    if vitals["activity_steps"] < 5000:
         score += 10
-        alerts.append("Frequência respiratória elevada")
-    elif respiratory < 12:
-        score += 10
-        alerts.append("Frequência respiratória baixa")
+        alerts.append("Pouca atividade física")
 
-    if sleep < 5:
-        score += 5
-        alerts.append("Qualidade do sono baixa")
+    score = min(score, 100)
 
-    if steps < 5000:
-        score += 5
-        alerts.append("Baixa atividade física")
-
-    if stress >= 8:
-        score += 10
-        alerts.append("Nível de estresse alto")
-
-    if hydration < 5:
-        score += 5
-        alerts.append("Baixa hidratação")
-
-    risk_score = min(score, 100)
-
-    if risk_score < 30:
-        risk_level = "Baixo"
-    elif risk_score < 60:
-        risk_level = "Moderado"
+    if score >= 60:
+        level = "Alto"
+    elif score >= 30:
+        level = "Moderado"
     else:
-        risk_level = "Alto"
+        level = "Baixo"
 
     return {
-        "risk_score": risk_score,
-        "risk_level": risk_level,
+        "riskScore": score,
+        "risk_score": score,
+        "riskLevel": level,
+        "risk_level": level,
         "alerts": alerts,
     }
 
 
-@app.get("/api/users")
-def get_users():
-    safe_profiles = []
-
-    for profile in profiles_database:
-        safe_profiles.append(
-            {
-                "id": profile["id"],
-                "name": profile["name"],
-                "age": profile["age"],
-                "condition": profile["condition"],
-                "baseline_vitals": profile["baseline_vitals"],
-            }
-        )
-
-    return safe_profiles
-
-
-@app.post("/api/users/select/{user_id}")
-def select_user(
-    user_id: int = Path(..., ge=1, le=100)
-):
-    global current_user_id
-    global current_vitals
-
-    profile = find_profile_by_id(user_id)
-
-    if not profile:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    current_user_id = user_id
-    current_vitals = simulate_vitals(profile)
-    risk = calculate_risk_level(current_vitals)
+def build_dashboard(user: dict) -> dict:
+    vitals = generate_vitals_for_user(user)
+    risk = calculate_risk(vitals)
 
     return {
-        "message": "Usuário selecionado",
-        "user": {
-            "id": profile["id"],
-            "name": profile["name"],
-            "age": profile["age"],
-            "condition": profile["condition"],
-            "baseline_vitals": profile["baseline_vitals"],
-        },
-        "vitals": current_vitals,
+        "user": user,
+        "vitals": vitals,
         "risk": risk,
+        "generated_at": datetime.utcnow().isoformat(),
     }
 
 
-@app.get("/api/health/dashboard")
-def get_dashboard():
-    if current_user_id is None or current_vitals is None:
-        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
-
-    profile = find_profile_by_id(current_user_id)
-
-    if not profile:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
-    risk = calculate_risk_level(current_vitals)
-
-    return {
-        "user": {
-            "id": profile["id"],
-            "name": profile["name"],
-            "age": profile["age"],
-            "condition": profile["condition"],
-            "baseline_vitals": profile["baseline_vitals"],
-        },
-        "vitals": current_vitals,
-        "risk": risk,
-    }
-
-
-@app.get("/api/health/history")
-def get_history(
-    days: int = Query(default=30, ge=1, le=90)
-):
-    if current_user_id is None:
-        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
-
-    profile = find_profile_by_id(current_user_id)
-
-    if not profile:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-
+def generate_history_for_user(user: dict) -> list[dict]:
     history = []
 
-    for i in range(days):
-        date = (datetime.now() - timedelta(days=days - i - 1)).strftime("%Y-%m-%d")
-        vitals = simulate_vitals(profile)
-        risk = calculate_risk_level(vitals)
+    for day in range(1, 8):
+        vitals = generate_vitals_for_user(user)
 
         history.append(
             {
-                "date": date,
+                "date": f"Dia {day}",
                 "vitals": vitals,
-                "risk": risk,
+                "risk": calculate_risk(vitals),
             }
         )
 
+    return history
+
+
+@app.get("/")
+async def root(request: Request):
+    audit_log(
+        event="root_access",
+        request=request,
+        status_code=200,
+        detail="Acesso ao endpoint raiz.",
+    )
+
     return {
-        "history": history,
+        "status": "online",
+        "service": "Vitalife API",
+        "message": "Backend funcionando com segurança ativa.",
     }
+
+
+@app.get("/api/users")
+async def get_users(request: Request):
+    audit_log(
+        event="list_users",
+        request=request,
+        status_code=200,
+        detail="Listagem de perfis simulados.",
+    )
+
+    return users
+
+
+@app.post("/api/users/select/{user_id}")
+async def select_user(request: Request, user_id: int):
+    global selected_user
+    global current_dashboard
+    global health_history
+
+    user = next((item for item in users if item["id"] == user_id), None)
+
+    if not user:
+        audit_log(
+            event="select_user_not_found",
+            request=request,
+            status_code=404,
+            detail="Tentativa de selecionar perfil inexistente.",
+            user_id=user_id,
+        )
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": "Perfil não encontrado."
+            },
+        )
+
+    selected_user = user
+    current_dashboard = build_dashboard(user)
+    health_history = generate_history_for_user(user)
+
+    audit_log(
+        event="select_user_success",
+        request=request,
+        status_code=200,
+        detail="Perfil selecionado com sucesso.",
+        user_id=user_id,
+        profile_name=user["name"],
+    )
+
+    return current_dashboard
 
 
 @app.post("/api/health/simulate")
-def simulate_new_data():
-    global current_vitals
+async def simulate_health_data(request: Request):
+    global current_dashboard
+    global health_history
 
-    if current_user_id is None:
-        raise HTTPException(status_code=400, detail="Nenhum usuário selecionado")
+    if not selected_user:
+        audit_log(
+            event="simulate_without_profile",
+            request=request,
+            status_code=400,
+            detail="Tentativa de simulação sem perfil selecionado.",
+        )
 
-    profile = find_profile_by_id(current_user_id)
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "Nenhum perfil selecionado."
+            },
+        )
 
-    if not profile:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    current_dashboard = build_dashboard(selected_user)
 
-    current_vitals = simulate_vitals(profile)
-    risk = calculate_risk_level(current_vitals)
+    health_history.append(
+        {
+            "date": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+            "vitals": current_dashboard["vitals"],
+            "risk": current_dashboard["risk"],
+        }
+    )
+
+    health_history = health_history[-7:]
+
+    audit_log(
+        event="simulate_health_data",
+        request=request,
+        status_code=200,
+        detail="Nova simulação gerada.",
+        profile_name=selected_user["name"],
+    )
+
+    return current_dashboard
+
+
+@app.get("/api/health/dashboard")
+async def get_dashboard(request: Request):
+    if not current_dashboard:
+        audit_log(
+            event="dashboard_without_data",
+            request=request,
+            status_code=404,
+            detail="Dashboard solicitado sem dados disponíveis.",
+        )
+
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": "Nenhum dado disponível."
+            },
+        )
+
+    audit_log(
+        event="dashboard_access",
+        request=request,
+        status_code=200,
+        detail="Dashboard consultado.",
+        profile_name=current_dashboard["user"]["name"],
+    )
+
+    return current_dashboard
+
+
+@app.get("/api/health/history")
+async def get_health_history(request: Request):
+    audit_log(
+        event="history_access",
+        request=request,
+        status_code=200,
+        detail="Histórico de saúde consultado.",
+    )
+
+    return health_history
+
+
+@app.post("/api/auth/login")
+async def login_audit_example(request: Request):
+    log_login_attempt(
+        request=request,
+        email="simulacao@vitalife.com",
+        success=True,
+        reason="Endpoint demonstrativo de auditoria.",
+    )
 
     return {
-        "vitals": current_vitals,
-        "risk": risk,
+        "detail": "Login auditado com sucesso."
     }
 
 
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/health")
+async def health_check(request: Request):
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
