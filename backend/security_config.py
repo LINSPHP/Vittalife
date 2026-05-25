@@ -9,12 +9,18 @@ from starlette.middleware.base import BaseHTTPMiddleware
 ALLOWED_ORIGINS = [
     "https://vitalife-741b2.web.app",
     "https://vitalife-741b2.firebaseapp.com",
+    "https://vittalife-741b2.web.app",
+    "https://vittalife-741b2.firebaseapp.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 ALLOWED_HOSTS = [
     "vittalife-backend.onrender.com",
+    "vitalife-backend.onrender.com",
+    "*.onrender.com",
     "localhost",
     "127.0.0.1",
 ]
@@ -24,33 +30,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
-        response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; "
-            "base-uri 'self'; "
-            "frame-ancestors 'none'; "
-            "object-src 'none'; "
-            "form-action 'self'; "
-            "img-src 'self' data: https:; "
-            "font-src 'self' data: https:; "
-            "style-src 'self' 'unsafe-inline' https:; "
-            "script-src 'self'; "
-            "connect-src 'self' "
-            "https://vitalife-741b2.web.app "
-            "https://vitalife-741b2.firebaseapp.com "
-            "https://vittalife-backend.onrender.com "
-            "http://localhost:5173 "
-            "http://127.0.0.1:5173; "
-            "upgrade-insecure-requests"
-        )
-
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = (
             "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
         )
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = (
@@ -83,18 +68,7 @@ def configure_security_middlewares(
         allow_origins=origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=[
-            "Authorization",
-            "Content-Type",
-            "Accept",
-            "Origin",
-            "User-Agent",
-            "X-Requested-With",
-            "X-CSRF-Token",
-        ],
-        expose_headers=[
-            "X-Request-ID",
-            "Retry-After",
-        ],
+        allow_headers=["*"],
+        expose_headers=["*"],
         max_age=600,
     )
