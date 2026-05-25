@@ -7,10 +7,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 
 ALLOWED_ORIGINS = [
-    "https://vitalife-741b2.web.app",
-    "https://vitalife-741b2.firebaseapp.com",
     "https://vittalife-741b2.web.app",
     "https://vittalife-741b2.firebaseapp.com",
+    "https://vitalife-741b2.web.app",
+    "https://vitalife-741b2.firebaseapp.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
@@ -66,7 +66,7 @@ def configure_security_middlewares(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["*"],
         expose_headers=["*"],
